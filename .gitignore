@@ -1,6 +1,11 @@
 *.dll
 *.exe
 .DS_Store
+
+# Local test directory
+test/
+terraform.tfstate*
+.terraform.lock.hcl
 example.tf
 terraform.tfplan
 terraform.tfstate
