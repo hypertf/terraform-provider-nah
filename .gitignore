@@ -38,3 +38,7 @@ website/vendor
 
 # Keep windows files with windows line endings
 *.winfile eol=crlf
+
+# GPG keys - do not commit
+gpg-private-key.asc
+gpg-public-key.asc
