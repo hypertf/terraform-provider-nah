@@ -25,9 +25,9 @@ type MetadataResource struct {
 }
 
 type MetadataResourceModel struct {
-	ID        types.String `tfsdk:"id"`
-	Path      types.String `tfsdk:"path"`
-	Value     types.String `tfsdk:"value"`
+	ID    types.String `tfsdk:"id"`
+	Path  types.String `tfsdk:"path"`
+	Value types.String `tfsdk:"value"`
 }
 
 func (r *MetadataResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

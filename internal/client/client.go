@@ -12,14 +12,14 @@ import (
 
 const DefaultEndpoint = "https://nahcloud.com"
 
-// Client is the NahCloud API client
+// Client is the NahCloud API client.
 type Client struct {
 	endpoint   string
 	token      string
 	httpClient *http.Client
 }
 
-// NewClient creates a new NahCloud API client
+// NewClient creates a new NahCloud API client.
 func NewClient(endpoint, token string) *Client {
 	if endpoint == "" {
 		endpoint = DefaultEndpoint
@@ -33,7 +33,7 @@ func NewClient(endpoint, token string) *Client {
 	}
 }
 
-// Project represents a NahCloud project
+// Project represents a NahCloud project.
 type Project struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -41,7 +41,7 @@ type Project struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Instance represents a NahCloud compute instance
+// Instance represents a NahCloud compute instance.
 type Instance struct {
 	ID        string    `json:"id"`
 	ProjectID string    `json:"project_id"`
@@ -54,7 +54,7 @@ type Instance struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Metadata represents NahCloud key-value metadata
+// Metadata represents NahCloud key-value metadata.
 type Metadata struct {
 	ID        string    `json:"id"`
 	Path      string    `json:"path"`
@@ -63,7 +63,7 @@ type Metadata struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Bucket represents a NahCloud storage bucket
+// Bucket represents a NahCloud storage bucket.
 type Bucket struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -71,7 +71,7 @@ type Bucket struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Object represents a NahCloud storage object
+// Object represents a NahCloud storage object.
 type Object struct {
 	ID        string    `json:"id"`
 	BucketID  string    `json:"bucket_id"`

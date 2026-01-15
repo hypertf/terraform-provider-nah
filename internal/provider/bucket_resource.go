@@ -25,8 +25,8 @@ type BucketResource struct {
 }
 
 type BucketResourceModel struct {
-	ID        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
+	ID   types.String `tfsdk:"id"`
+	Name types.String `tfsdk:"name"`
 }
 
 func (r *BucketResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

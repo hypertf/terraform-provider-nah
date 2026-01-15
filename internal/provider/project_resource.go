@@ -25,8 +25,8 @@ type ProjectResource struct {
 }
 
 type ProjectResourceModel struct {
-	ID        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
+	ID   types.String `tfsdk:"id"`
+	Name types.String `tfsdk:"name"`
 }
 
 func (r *ProjectResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

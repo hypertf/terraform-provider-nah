@@ -7,7 +7,7 @@ resource "nah_bucket" "assets" {
 resource "nah_object" "config" {
   bucket_id = nah_bucket.assets.id
   path      = "config/settings.json"
-  content   = base64encode(jsonencode({
+  content = base64encode(jsonencode({
     debug = true
     level = "info"
   }))

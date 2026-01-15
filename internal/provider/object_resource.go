@@ -25,10 +25,10 @@ type ObjectResource struct {
 }
 
 type ObjectResourceModel struct {
-	ID        types.String `tfsdk:"id"`
-	BucketID  types.String `tfsdk:"bucket_id"`
-	Path      types.String `tfsdk:"path"`
-	Content   types.String `tfsdk:"content"`
+	ID       types.String `tfsdk:"id"`
+	BucketID types.String `tfsdk:"bucket_id"`
+	Path     types.String `tfsdk:"path"`
+	Content  types.String `tfsdk:"content"`
 }
 
 func (r *ObjectResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
