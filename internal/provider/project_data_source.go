@@ -22,6 +22,7 @@ type ProjectDataSource struct {
 
 type ProjectDataSourceModel struct {
 	ID        types.String `tfsdk:"id"`
+	Slug      types.String `tfsdk:"slug"`
 	Name      types.String `tfsdk:"name"`
 	CreatedAt types.String `tfsdk:"created_at"`
 	UpdatedAt types.String `tfsdk:"updated_at"`
@@ -36,8 +37,9 @@ func (d *ProjectDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 		MarkdownDescription: "Fetches information about a NahCloud project.",
 
 		Attributes: map[string]schema.Attribute{
+			"slug": schema.StringAttribute{Required: true, MarkdownDescription: "Project slug within the authenticated organization."},
 			"id": schema.StringAttribute{
-				Required:            true,
+				Computed:            true,
 				MarkdownDescription: "The unique identifier of the project.",
 			},
 			"name": schema.StringAttribute{
@@ -81,12 +83,13 @@ func (d *ProjectDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	project, err := d.client.GetProject(ctx, data.ID.ValueString())
+	project, err := d.client.GetProject(ctx, data.Slug.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read project: %s", err))
 		return
 	}
 
+	data.ID = types.StringValue(project.ID)
 	data.Name = types.StringValue(project.Name)
 	data.CreatedAt = types.StringValue(project.CreatedAt.Format("2006-01-02T15:04:05Z07:00"))
 	data.UpdatedAt = types.StringValue(project.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"))

@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hypertf/terraform-provider-nah/internal/client"
 )
@@ -26,6 +26,7 @@ type ObjectResource struct {
 
 type ObjectResourceModel struct {
 	ID       types.String `tfsdk:"id"`
+	Project  types.String `tfsdk:"project"`
 	BucketID types.String `tfsdk:"bucket_id"`
 	Path     types.String `tfsdk:"path"`
 	Content  types.String `tfsdk:"content"`
@@ -40,6 +41,7 @@ func (r *ObjectResource) Schema(ctx context.Context, req resource.SchemaRequest,
 		MarkdownDescription: "Manages a NahCloud storage object within a bucket. Content is stored as base64-encoded string.",
 
 		Attributes: map[string]schema.Attribute{
+			"project": schema.StringAttribute{Required: true, Validators: []validator.String{slugValidator}, MarkdownDescription: "Project slug (not ID). Immutable.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "The unique identifier of the object.",
@@ -56,10 +58,13 @@ func (r *ObjectResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 			"path": schema.StringAttribute{
 				Required:            true,
+				Validators:          []validator.String{apiString{min: 1, max: 1024}},
 				MarkdownDescription: "The path of the object within the bucket.",
 			},
 			"content": schema.StringAttribute{
 				Required:            true,
+				Validators:          []validator.String{apiString{min: 1}},
+				Sensitive:           true,
 				MarkdownDescription: "The content of the object (base64-encoded).",
 			},
 		},
@@ -96,7 +101,7 @@ func (r *ObjectResource) Create(ctx context.Context, req resource.CreateRequest,
 		Content: data.Content.ValueString(),
 	}
 
-	object, err := r.client.CreateObject(ctx, data.BucketID.ValueString(), createReq)
+	object, err := r.client.CreateObject(ctx, data.Project.ValueString(), data.BucketID.ValueString(), createReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create object: %s", err))
 		return
@@ -118,7 +123,11 @@ func (r *ObjectResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	object, err := r.client.GetObject(ctx, data.BucketID.ValueString(), data.ID.ValueString())
+	object, err := r.client.GetObject(ctx, data.Project.ValueString(), data.BucketID.ValueString(), data.ID.ValueString())
+	if client.IsNotFound(err) {
+		resp.State.RemoveResource(ctx)
+		return
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read object: %s", err))
 		return
@@ -147,7 +156,7 @@ func (r *ObjectResource) Update(ctx context.Context, req resource.UpdateRequest,
 		Content: &content,
 	}
 
-	object, err := r.client.UpdateObject(ctx, data.BucketID.ValueString(), data.ID.ValueString(), updateReq)
+	object, err := r.client.UpdateObject(ctx, data.Project.ValueString(), data.BucketID.ValueString(), data.ID.ValueString(), updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update object: %s", err))
 		return
@@ -167,13 +176,13 @@ func (r *ObjectResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	err := r.client.DeleteObject(ctx, data.BucketID.ValueString(), data.ID.ValueString())
-	if err != nil {
+	err := r.client.DeleteObject(ctx, data.Project.ValueString(), data.BucketID.ValueString(), data.ID.ValueString())
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete object: %s", err))
 		return
 	}
 }
 
 func (r *ObjectResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	importScoped(ctx, req, resp, "project", "bucket_id", "id")
 }

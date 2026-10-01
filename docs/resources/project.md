@@ -15,6 +15,7 @@ Manages a NahCloud project. Projects are top-level containers for other resource
 ```terraform
 # Create a NahCloud project
 resource "nah_project" "example" {
+  slug = "my-project"
   name = "my-project"
 }
 
@@ -29,7 +30,18 @@ output "project_id" {
 ### Required
 
 - `name` (String) The name of the project.
+- `slug` (String) Organization-scoped immutable project slug; used in routes and imports.
 
 ### Read-Only
 
 - `id` (String) The unique identifier of the project.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import nah_project.example my-project
+```

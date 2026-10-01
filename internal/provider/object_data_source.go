@@ -22,6 +22,7 @@ type ObjectDataSource struct {
 
 type ObjectDataSourceModel struct {
 	ID        types.String `tfsdk:"id"`
+	Project   types.String `tfsdk:"project"`
 	BucketID  types.String `tfsdk:"bucket_id"`
 	Path      types.String `tfsdk:"path"`
 	Content   types.String `tfsdk:"content"`
@@ -38,6 +39,7 @@ func (d *ObjectDataSource) Schema(ctx context.Context, req datasource.SchemaRequ
 		MarkdownDescription: "Fetches information about a NahCloud storage object.",
 
 		Attributes: map[string]schema.Attribute{
+			"project": schema.StringAttribute{Required: true, MarkdownDescription: "Project slug (not ID)."},
 			"id": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "The unique identifier of the object.",
@@ -52,6 +54,7 @@ func (d *ObjectDataSource) Schema(ctx context.Context, req datasource.SchemaRequ
 			},
 			"content": schema.StringAttribute{
 				Computed:            true,
+				Sensitive:           true,
 				MarkdownDescription: "The content of the object (base64-encoded).",
 			},
 			"created_at": schema.StringAttribute{
@@ -91,7 +94,7 @@ func (d *ObjectDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	object, err := d.client.GetObject(ctx, data.BucketID.ValueString(), data.ID.ValueString())
+	object, err := d.client.GetObject(ctx, data.Project.ValueString(), data.BucketID.ValueString(), data.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read object: %s", err))
 		return

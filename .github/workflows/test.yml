@@ -5,11 +5,8 @@ name: Tests
 # Optionally, you can turn it on using a schedule for regular testing.
 on:
   pull_request:
-    paths-ignore:
-      - 'README.md'
   push:
-    paths-ignore:
-      - 'README.md'
+    branches: [main]
 
 # Testing only needs permissions to read the repository contents.
 permissions:
@@ -20,7 +17,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
@@ -29,10 +26,12 @@ jobs:
           cache: true
       - run: go mod download
       - run: go build -v .
+      - run: go test -race -cover ./...
+      - run: test -z "$(gofmt -l internal main.go)"
       - name: Run linters
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
-          version: latest
+          version: v2.14.0
 
   generate:
     runs-on: ubuntu-latest
@@ -45,26 +44,30 @@ jobs:
       # We need the latest version of Terraform for our documentation generation to use
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
+          terraform_version: '1.16.4'
           terraform_wrapper: false
       - run: make generate
       - name: git diff
         run: |
-          git diff --compact-summary --exit-code || \
+          test -z "$(git status --porcelain)" || \
             (echo; echo "Unexpected difference in directories after code generation. Run 'make generate' command and commit."; exit 1)
 
-  # Run acceptance tests in a matrix with Terraform CLI versions
+  # Real provider binary + upstream router + disposable SQLite; no shared secrets.
   test:
-    name: 'Acceptance Tests: Terraform ${{ matrix.terraform }}'
+    name: 'Acceptance: ${{ matrix.cli }} ${{ matrix.version }}'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        # Terraform versions
-        terraform:
-          - '1.13.*'
-          - '1.14.*'
+        include:
+          - cli: terraform
+            version: '1.13.5'
+          - cli: terraform
+            version: '1.16.4'
+          - cli: tofu
+            version: '1.13.0'
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
@@ -72,11 +75,18 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        if: matrix.cli == 'terraform'
         with:
-          terraform_version: ${{ matrix.terraform }}
+          terraform_version: ${{ matrix.version }}
           terraform_wrapper: false
+      - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
+        if: matrix.cli == 'tofu'
+        with:
+          tofu_version: ${{ matrix.version }}
+          tofu_wrapper: false
       - run: go mod download
       - env:
           TF_ACC: "1"
-        run: go test -v -cover ./internal/provider/
+          NAH_TEST_CLI: ${{ matrix.cli }}
+        run: go test -v -count=1 -timeout 10m ./internal/acceptance/
         timeout-minutes: 10

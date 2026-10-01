@@ -13,13 +13,20 @@ Manages a NahCloud storage object within a bucket. Content is stored as base64-e
 ## Example Usage
 
 ```terraform
+resource "nah_project" "example" {
+  slug = "my-project"
+  name = "My project"
+}
+
 # Create a bucket first
 resource "nah_bucket" "assets" {
-  name = "my-assets"
+  project = nah_project.example.slug
+  name    = "my-assets"
 }
 
 # Create an object in the bucket
 resource "nah_object" "config" {
+  project   = nah_project.example.slug
   bucket_id = nah_bucket.assets.id
   path      = "config/settings.json"
   content = base64encode(jsonencode({
@@ -39,9 +46,20 @@ output "object_id" {
 ### Required
 
 - `bucket_id` (String) The ID of the bucket this object belongs to.
-- `content` (String) The content of the object (base64-encoded).
+- `content` (String, Sensitive) The content of the object (base64-encoded).
 - `path` (String) The path of the object within the bucket.
+- `project` (String) Project slug (not ID). Immutable.
 
 ### Read-Only
 
 - `id` (String) The unique identifier of the object.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import nah_object.config my-project/BUCKET_ID/OBJECT_ID
+```

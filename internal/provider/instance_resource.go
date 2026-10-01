@@ -4,13 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hypertf/terraform-provider-nah/internal/client"
 )
@@ -28,6 +30,8 @@ type InstanceResource struct {
 
 type InstanceResourceModel struct {
 	ID        types.String `tfsdk:"id"`
+	Project   types.String `tfsdk:"project"`
+	Region    types.String `tfsdk:"region"`
 	ProjectID types.String `tfsdk:"project_id"`
 	Name      types.String `tfsdk:"name"`
 	CPU       types.Int64  `tfsdk:"cpu"`
@@ -45,6 +49,8 @@ func (r *InstanceResource) Schema(ctx context.Context, req resource.SchemaReques
 		MarkdownDescription: "Manages a NahCloud compute instance.",
 
 		Attributes: map[string]schema.Attribute{
+			"project": schema.StringAttribute{Required: true, Validators: []validator.String{slugValidator}, MarkdownDescription: "Project slug (not ID). Changing it replaces the instance.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
+			"region":  schema.StringAttribute{Required: true, Validators: []validator.String{stringvalidator.OneOf("us-east-1", "us-west-1", "eu-west-1", "eu-central-1", "ap-east-1")}, MarkdownDescription: "Region: us-east-1, us-west-1, eu-west-1, eu-central-1, or ap-east-1. Immutable.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "The unique identifier of the instance.",
@@ -53,33 +59,39 @@ func (r *InstanceResource) Schema(ctx context.Context, req resource.SchemaReques
 				},
 			},
 			"project_id": schema.StringAttribute{
-				Required:            true,
+				Computed:            true,
 				MarkdownDescription: "The ID of the project this instance belongs to.",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "The name of the instance.",
+				Validators:          []validator.String{nameValidator},
+				MarkdownDescription: "Instance name, 1–255 ASCII letters, digits, underscores, or hyphens. Unique within the project.",
 			},
 			"cpu": schema.Int64Attribute{
+				Validators:          []validator.Int64{int64validator.Between(1, 64)},
 				Optional:            true,
 				Computed:            true,
 				Default:             int64default.StaticInt64(1),
-				MarkdownDescription: "The number of CPUs for the instance. Defaults to 1.",
+				MarkdownDescription: "Number of CPUs, 1–64. Defaults to 1.",
 			},
 			"memory_mb": schema.Int64Attribute{
+				Validators:          []validator.Int64{int64validator.Between(1, 524288)},
 				Optional:            true,
 				Computed:            true,
 				Default:             int64default.StaticInt64(512),
-				MarkdownDescription: "The amount of memory in MB for the instance. Defaults to 512.",
+				MarkdownDescription: "Memory in MB, 1–524288. Defaults to 512.",
 			},
 			"image": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "The image to use for the instance.",
+				Validators:          []validator.String{apiString{min: 1, max: 255}},
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				MarkdownDescription: "Image identifier, 1–255 bytes. Changing it replaces the instance.",
 			},
 			"status": schema.StringAttribute{
+				Validators:          []validator.String{stringvalidator.OneOf("running", "stopped")},
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("running"),
@@ -115,15 +127,15 @@ func (r *InstanceResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	createReq := &client.CreateInstanceRequest{
-		ProjectID: data.ProjectID.ValueString(),
-		Name:      data.Name.ValueString(),
-		CPU:       int(data.CPU.ValueInt64()),
-		MemoryMB:  int(data.MemoryMB.ValueInt64()),
-		Image:     data.Image.ValueString(),
-		Status:    data.Status.ValueString(),
+		Region:   data.Region.ValueString(),
+		Name:     data.Name.ValueString(),
+		CPU:      int(data.CPU.ValueInt64()),
+		MemoryMB: int(data.MemoryMB.ValueInt64()),
+		Image:    data.Image.ValueString(),
+		Status:   data.Status.ValueString(),
 	}
 
-	instance, err := r.client.CreateInstance(ctx, createReq)
+	instance, err := r.client.CreateInstance(ctx, data.Project.ValueString(), createReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create instance: %s", err))
 		return
@@ -148,12 +160,17 @@ func (r *InstanceResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	instance, err := r.client.GetInstance(ctx, data.ID.ValueString())
+	instance, err := r.client.GetInstance(ctx, data.Project.ValueString(), data.ID.ValueString())
+	if client.IsNotFound(err) {
+		resp.State.RemoveResource(ctx)
+		return
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read instance: %s", err))
 		return
 	}
 
+	data.Region = types.StringValue(instance.Region)
 	data.ProjectID = types.StringValue(instance.ProjectID)
 	data.Name = types.StringValue(instance.Name)
 	data.CPU = types.Int64Value(int64(instance.CPU))
@@ -186,7 +203,7 @@ func (r *InstanceResource) Update(ctx context.Context, req resource.UpdateReques
 		Status:   &status,
 	}
 
-	instance, err := r.client.UpdateInstance(ctx, data.ID.ValueString(), updateReq)
+	instance, err := r.client.UpdateInstance(ctx, data.Project.ValueString(), data.ID.ValueString(), updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update instance: %s", err))
 		return
@@ -209,13 +226,13 @@ func (r *InstanceResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
-	err := r.client.DeleteInstance(ctx, data.ID.ValueString())
-	if err != nil {
+	err := r.client.DeleteInstance(ctx, data.Project.ValueString(), data.ID.ValueString())
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete instance: %s", err))
 		return
 	}
 }
 
 func (r *InstanceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	importScoped(ctx, req, resp, "project", "id")
 }

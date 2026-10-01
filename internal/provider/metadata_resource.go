@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hypertf/terraform-provider-nah/internal/client"
 )
@@ -48,10 +48,12 @@ func (r *MetadataResource) Schema(ctx context.Context, req resource.SchemaReques
 			},
 			"path": schema.StringAttribute{
 				Required:            true,
+				Validators:          []validator.String{apiString{min: 1}},
 				MarkdownDescription: "The path for the metadata entry (e.g., `/config/app/setting`).",
 			},
 			"value": schema.StringAttribute{
 				Required:            true,
+				Sensitive:           true,
 				MarkdownDescription: "The value for the metadata entry.",
 			},
 		},
@@ -105,6 +107,10 @@ func (r *MetadataResource) Read(ctx context.Context, req resource.ReadRequest, r
 	}
 
 	metadata, err := r.client.GetMetadata(ctx, data.ID.ValueString())
+	if client.IsNotFound(err) {
+		resp.State.RemoveResource(ctx)
+		return
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read metadata: %s", err))
 		return
@@ -153,12 +159,12 @@ func (r *MetadataResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	err := r.client.DeleteMetadata(ctx, data.ID.ValueString())
-	if err != nil {
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete metadata: %s", err))
 		return
 	}
 }
 
 func (r *MetadataResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	importScoped(ctx, req, resp, "id")
 }

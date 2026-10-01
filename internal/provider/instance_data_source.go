@@ -22,6 +22,8 @@ type InstanceDataSource struct {
 
 type InstanceDataSourceModel struct {
 	ID        types.String `tfsdk:"id"`
+	Project   types.String `tfsdk:"project"`
+	Region    types.String `tfsdk:"region"`
 	ProjectID types.String `tfsdk:"project_id"`
 	Name      types.String `tfsdk:"name"`
 	CPU       types.Int64  `tfsdk:"cpu"`
@@ -41,6 +43,8 @@ func (d *InstanceDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 		MarkdownDescription: "Fetches information about a NahCloud compute instance.",
 
 		Attributes: map[string]schema.Attribute{
+			"project": schema.StringAttribute{Required: true, MarkdownDescription: "Project slug (not ID)."},
+			"region":  schema.StringAttribute{Computed: true, MarkdownDescription: "Instance region."},
 			"id": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "The unique identifier of the instance.",
@@ -106,12 +110,13 @@ func (d *InstanceDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	instance, err := d.client.GetInstance(ctx, data.ID.ValueString())
+	instance, err := d.client.GetInstance(ctx, data.Project.ValueString(), data.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read instance: %s", err))
 		return
 	}
 
+	data.Region = types.StringValue(instance.Region)
 	data.ProjectID = types.StringValue(instance.ProjectID)
 	data.Name = types.StringValue(instance.Name)
 	data.CPU = types.Int64Value(int64(instance.CPU))

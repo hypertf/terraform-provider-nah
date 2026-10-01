@@ -31,8 +31,18 @@ resource "nah_metadata" "db_config" {
 ### Required
 
 - `path` (String) The path for the metadata entry (e.g., `/config/app/setting`).
-- `value` (String) The value for the metadata entry.
+- `value` (String, Sensitive) The value for the metadata entry.
 
 ### Read-Only
 
 - `id` (String) The unique identifier of the metadata entry.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import nah_metadata.app_config METADATA_ID
+```

@@ -13,9 +13,15 @@ Manages a NahCloud storage bucket. Buckets are logical containers for objects.
 ## Example Usage
 
 ```terraform
+resource "nah_project" "example" {
+  slug = "my-project"
+  name = "My project"
+}
+
 # Create a storage bucket
 resource "nah_bucket" "assets" {
-  name = "my-assets"
+  project = nah_project.example.slug
+  name    = "my-assets"
 }
 
 output "bucket_id" {
@@ -28,8 +34,19 @@ output "bucket_id" {
 
 ### Required
 
-- `name` (String) The name of the bucket. Must be unique.
+- `name` (String) Bucket name, 1–255 ASCII letters, digits, underscores, or hyphens. Unique within the project; renaming preserves the bucket and its objects.
+- `project` (String) Project slug (not ID). Immutable.
 
 ### Read-Only
 
 - `id` (String) The unique identifier of the bucket.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import nah_bucket.assets my-project/BUCKET_ID
+```

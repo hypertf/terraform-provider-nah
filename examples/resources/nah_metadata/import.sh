@@ -1,0 +1,1 @@
+terraform import nah_metadata.app_config METADATA_ID

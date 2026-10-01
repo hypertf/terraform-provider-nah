@@ -2,9 +2,12 @@ package provider
 
 import (
 	"context"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -35,11 +38,11 @@ func (p *NahProvider) Schema(ctx context.Context, req provider.SchemaRequest, re
 		MarkdownDescription: "The NahCloud provider allows you to manage resources in NahCloud, a fake cloud API for testing Terraform tooling.",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "The NahCloud API endpoint. Defaults to `http://localhost:8080`. Can also be set via `NAH_ENDPOINT` environment variable.",
+				MarkdownDescription: "The NahCloud API endpoint. Defaults to `https://nahcloud.com`. Can also be set via `NAH_ENDPOINT` environment variable.",
 				Optional:            true,
 			},
 			"token": schema.StringAttribute{
-				MarkdownDescription: "The NahCloud API token for authentication. Can also be set via `NAH_TOKEN` environment variable.",
+				MarkdownDescription: "Required organization API token. Set here or via `NAH_TOKEN`. Never commit tokens to configuration.",
 				Optional:            true,
 				Sensitive:           true,
 			},
@@ -56,15 +59,30 @@ func (p *NahProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
-	// Use environment variables as fallback
-	endpoint := data.Endpoint.ValueString()
-	if endpoint == "" {
-		endpoint = os.Getenv("NAH_ENDPOINT")
+	if data.Endpoint.IsUnknown() || data.Token.IsUnknown() {
+		resp.Diagnostics.AddError("Unknown provider configuration", "Endpoint and token must be known before applying resources. Use an existing organization API token.")
+		return
 	}
 
-	token := data.Token.ValueString()
-	if token == "" {
-		token = os.Getenv("NAH_TOKEN")
+	endpoint := os.Getenv("NAH_ENDPOINT")
+	if !data.Endpoint.IsNull() {
+		endpoint = data.Endpoint.ValueString()
+	}
+	if endpoint == "" {
+		endpoint = client.DefaultEndpoint
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		resp.Diagnostics.AddAttributeError(path.Root("endpoint"), "Invalid endpoint", "Use an absolute http(s) URL without credentials, query parameters, or fragment.")
+		return
+	}
+	token := os.Getenv("NAH_TOKEN")
+	if !data.Token.IsNull() {
+		token = data.Token.ValueString()
+	}
+	if strings.TrimSpace(token) == "" {
+		resp.Diagnostics.AddAttributeError(path.Root("token"), "Missing API token", "Set token or NAH_TOKEN to an existing organization's API token. Anonymous organization creation is not supported.")
+		return
 	}
 
 	// Create the client
@@ -81,6 +99,7 @@ func (p *NahProvider) Resources(ctx context.Context) []func() resource.Resource 
 		NewMetadataResource,
 		NewBucketResource,
 		NewObjectResource,
+		NewAPIKeyResource,
 	}
 }
 
@@ -91,6 +110,7 @@ func (p *NahProvider) DataSources(ctx context.Context) []func() datasource.DataS
 		NewMetadataDataSource,
 		NewBucketDataSource,
 		NewObjectDataSource,
+		NewOrganizationDataSource,
 	}
 }
 

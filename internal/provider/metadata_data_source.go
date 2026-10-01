@@ -47,6 +47,7 @@ func (d *MetadataDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 			},
 			"value": schema.StringAttribute{
 				Computed:            true,
+				Sensitive:           true,
 				MarkdownDescription: "The value for the metadata entry.",
 			},
 			"created_at": schema.StringAttribute{

@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hypertf/terraform-provider-nah/internal/client"
 )
@@ -25,8 +25,9 @@ type BucketResource struct {
 }
 
 type BucketResourceModel struct {
-	ID   types.String `tfsdk:"id"`
-	Name types.String `tfsdk:"name"`
+	ID      types.String `tfsdk:"id"`
+	Project types.String `tfsdk:"project"`
+	Name    types.String `tfsdk:"name"`
 }
 
 func (r *BucketResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -38,6 +39,7 @@ func (r *BucketResource) Schema(ctx context.Context, req resource.SchemaRequest,
 		MarkdownDescription: "Manages a NahCloud storage bucket. Buckets are logical containers for objects.",
 
 		Attributes: map[string]schema.Attribute{
+			"project": schema.StringAttribute{Required: true, Validators: []validator.String{slugValidator}, MarkdownDescription: "Project slug (not ID). Immutable.", PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "The unique identifier of the bucket.",
@@ -47,7 +49,8 @@ func (r *BucketResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "The name of the bucket. Must be unique.",
+				Validators:          []validator.String{nameValidator},
+				MarkdownDescription: "Bucket name, 1–255 ASCII letters, digits, underscores, or hyphens. Unique within the project; renaming preserves the bucket and its objects.",
 			},
 		},
 	}
@@ -78,7 +81,7 @@ func (r *BucketResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	bucket, err := r.client.CreateBucket(ctx, data.Name.ValueString())
+	bucket, err := r.client.CreateBucket(ctx, data.Project.ValueString(), data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create bucket: %s", err))
 		return
@@ -98,7 +101,11 @@ func (r *BucketResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	bucket, err := r.client.GetBucket(ctx, data.ID.ValueString())
+	bucket, err := r.client.GetBucket(ctx, data.Project.ValueString(), data.ID.ValueString())
+	if client.IsNotFound(err) {
+		resp.State.RemoveResource(ctx)
+		return
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read bucket: %s", err))
 		return
@@ -117,7 +124,7 @@ func (r *BucketResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	bucket, err := r.client.UpdateBucket(ctx, data.ID.ValueString(), data.Name.ValueString())
+	bucket, err := r.client.UpdateBucket(ctx, data.Project.ValueString(), data.ID.ValueString(), data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update bucket: %s", err))
 		return
@@ -136,13 +143,13 @@ func (r *BucketResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	err := r.client.DeleteBucket(ctx, data.ID.ValueString())
-	if err != nil {
+	err := r.client.DeleteBucket(ctx, data.Project.ValueString(), data.ID.ValueString())
+	if err != nil && !client.IsNotFound(err) {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete bucket: %s", err))
 		return
 	}
 }
 
 func (r *BucketResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	importScoped(ctx, req, resp, "project", "id")
 }

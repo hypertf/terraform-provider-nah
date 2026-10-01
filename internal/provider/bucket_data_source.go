@@ -22,6 +22,7 @@ type BucketDataSource struct {
 
 type BucketDataSourceModel struct {
 	ID        types.String `tfsdk:"id"`
+	Project   types.String `tfsdk:"project"`
 	Name      types.String `tfsdk:"name"`
 	CreatedAt types.String `tfsdk:"created_at"`
 	UpdatedAt types.String `tfsdk:"updated_at"`
@@ -36,6 +37,7 @@ func (d *BucketDataSource) Schema(ctx context.Context, req datasource.SchemaRequ
 		MarkdownDescription: "Fetches information about a NahCloud storage bucket.",
 
 		Attributes: map[string]schema.Attribute{
+			"project": schema.StringAttribute{Required: true, MarkdownDescription: "Project slug (not ID)."},
 			"id": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "The unique identifier of the bucket.",
@@ -81,7 +83,7 @@ func (d *BucketDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	bucket, err := d.client.GetBucket(ctx, data.ID.ValueString())
+	bucket, err := d.client.GetBucket(ctx, data.Project.ValueString(), data.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read bucket: %s", err))
 		return

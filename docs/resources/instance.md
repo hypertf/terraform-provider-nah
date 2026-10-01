@@ -15,17 +15,19 @@ Manages a NahCloud compute instance.
 ```terraform
 # Create a project first
 resource "nah_project" "example" {
+  slug = "my-project"
   name = "my-project"
 }
 
 # Create a compute instance
 resource "nah_instance" "web" {
-  project_id = nah_project.example.id
-  name       = "web-server"
-  cpu        = 2
-  memory_mb  = 1024
-  image      = "ubuntu:22.04"
-  status     = "running"
+  project   = nah_project.example.slug
+  region    = "us-east-1"
+  name      = "web-server"
+  cpu       = 2
+  memory_mb = 1024
+  image     = "ubuntu:22.04"
+  status    = "running"
 }
 
 output "instance_id" {
@@ -38,16 +40,28 @@ output "instance_id" {
 
 ### Required
 
-- `image` (String) The image to use for the instance.
-- `name` (String) The name of the instance.
-- `project_id` (String) The ID of the project this instance belongs to.
+- `image` (String) Image identifier, 1–255 bytes. Changing it replaces the instance.
+- `name` (String) Instance name, 1–255 ASCII letters, digits, underscores, or hyphens. Unique within the project.
+- `project` (String) Project slug (not ID). Changing it replaces the instance.
+- `region` (String) Region: us-east-1, us-west-1, eu-west-1, eu-central-1, or ap-east-1. Immutable.
 
 ### Optional
 
-- `cpu` (Number) The number of CPUs for the instance. Defaults to 1.
-- `memory_mb` (Number) The amount of memory in MB for the instance. Defaults to 512.
+- `cpu` (Number) Number of CPUs, 1–64. Defaults to 1.
+- `memory_mb` (Number) Memory in MB, 1–524288. Defaults to 512.
 - `status` (String) The status of the instance. Valid values: `running`, `stopped`. Defaults to `running`.
 
 ### Read-Only
 
 - `id` (String) The unique identifier of the instance.
+- `project_id` (String) The ID of the project this instance belongs to.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import nah_instance.web my-project/INSTANCE_ID
+```

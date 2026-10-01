@@ -22,13 +22,12 @@ terraform {
 
 # Configure the NahCloud provider
 provider "nah" {
-  # The API endpoint. Defaults to http://localhost:8080
+  # The API endpoint. Defaults to https://nahcloud.com
   # Can also be set via NAH_ENDPOINT environment variable
-  endpoint = "http://localhost:8080"
+  endpoint = "https://nahcloud.com"
 
-  # Optional authentication token
-  # Can also be set via NAH_TOKEN environment variable
-  # token = "your-token"
+  # Export NAH_TOKEN with an existing organization API token.
+  # Do not commit credentials to configuration.
 }
 ```
 
@@ -37,5 +36,5 @@ provider "nah" {
 
 ### Optional
 
-- `endpoint` (String) The NahCloud API endpoint. Defaults to `http://localhost:8080`. Can also be set via `NAH_ENDPOINT` environment variable.
-- `token` (String, Sensitive) The NahCloud API token for authentication. Can also be set via `NAH_TOKEN` environment variable.
+- `endpoint` (String) The NahCloud API endpoint. Defaults to `https://nahcloud.com`. Can also be set via `NAH_ENDPOINT` environment variable.
+- `token` (String, Sensitive) Required organization API token. Set here or via `NAH_TOKEN`. Never commit tokens to configuration.
