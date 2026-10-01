@@ -100,6 +100,14 @@ func (p *NahProvider) Resources(ctx context.Context) []func() resource.Resource 
 		NewBucketResource,
 		NewObjectResource,
 		NewAPIKeyResource,
+		NewNetworkResource,
+		NewSubnetResource,
+		NewDiskResource,
+		NewDiskAttachmentResource,
+		NewPolicyResource,
+		NewPolicyBindingResource,
+		NewLoadBalancerResource,
+		NewLoadBalancerBackendResource,
 	}
 }
 
@@ -111,6 +119,14 @@ func (p *NahProvider) DataSources(ctx context.Context) []func() datasource.DataS
 		NewBucketDataSource,
 		NewObjectDataSource,
 		NewOrganizationDataSource,
+		NewNetworkDataSource,
+		NewSubnetDataSource,
+		NewDiskDataSource,
+		NewDiskAttachmentDataSource,
+		NewPolicyDataSource,
+		NewPolicyBindingDataSource,
+		NewLoadBalancerDataSource,
+		NewLoadBalancerBackendDataSource,
 	}
 }
 

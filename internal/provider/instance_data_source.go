@@ -25,6 +25,7 @@ type InstanceDataSourceModel struct {
 	Project   types.String `tfsdk:"project"`
 	Region    types.String `tfsdk:"region"`
 	ProjectID types.String `tfsdk:"project_id"`
+	SubnetID  types.String `tfsdk:"subnet_id"`
 	Name      types.String `tfsdk:"name"`
 	CPU       types.Int64  `tfsdk:"cpu"`
 	MemoryMB  types.Int64  `tfsdk:"memory_mb"`
@@ -52,6 +53,10 @@ func (d *InstanceDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 			"project_id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "The ID of the project this instance belongs to.",
+			},
+			"subnet_id": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Opaque subnet ID, or null for instances not attached to a subnet.",
 			},
 			"name": schema.StringAttribute{
 				Computed:            true,
@@ -118,6 +123,7 @@ func (d *InstanceDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	data.Region = types.StringValue(instance.Region)
 	data.ProjectID = types.StringValue(instance.ProjectID)
+	data.SubnetID = types.StringPointerValue(instance.SubnetID)
 	data.Name = types.StringValue(instance.Name)
 	data.CPU = types.Int64Value(int64(instance.CPU))
 	data.MemoryMB = types.Int64Value(int64(instance.MemoryMB))

@@ -1,3 +1,11 @@
+## Unreleased
+
+FEATURES:
+
+- Project networks/subnets, regional disks/attachments, organization policies/bindings, and subnet-bound load balancers/backends, with matching data sources and scoped imports.
+- Optional replacement-only instance `subnet_id` and state-aware disk expansion/shrink behavior.
+- Local-only Terraform 1.16.4 and OpenTofu 1.13.0 CLI acceptance against the frozen cloud-graph contract.
+
 ## 0.2.0 (October 1, 2026)
 
 FEATURES:

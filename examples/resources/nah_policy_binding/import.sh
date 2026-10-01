@@ -1,0 +1,1 @@
+terraform import nah_policy_binding.automation POLICY_ID/BINDING_ID

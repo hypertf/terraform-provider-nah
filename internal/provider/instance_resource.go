@@ -33,6 +33,7 @@ type InstanceResourceModel struct {
 	Project   types.String `tfsdk:"project"`
 	Region    types.String `tfsdk:"region"`
 	ProjectID types.String `tfsdk:"project_id"`
+	SubnetID  types.String `tfsdk:"subnet_id"`
 	Name      types.String `tfsdk:"name"`
 	CPU       types.Int64  `tfsdk:"cpu"`
 	MemoryMB  types.Int64  `tfsdk:"memory_mb"`
@@ -64,6 +65,13 @@ func (r *InstanceResource) Schema(ctx context.Context, req resource.SchemaReques
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"subnet_id": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				Validators:          []validator.String{apiString{min: 1, max: 255}},
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				MarkdownDescription: "Optional opaque subnet ID. Adding, changing, or removing it replaces the instance.",
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
@@ -134,6 +142,10 @@ func (r *InstanceResource) Create(ctx context.Context, req resource.CreateReques
 		Image:    data.Image.ValueString(),
 		Status:   data.Status.ValueString(),
 	}
+	if !data.SubnetID.IsNull() && !data.SubnetID.IsUnknown() {
+		subnetID := data.SubnetID.ValueString()
+		createReq.SubnetID = &subnetID
+	}
 
 	instance, err := r.client.CreateInstance(ctx, data.Project.ValueString(), createReq)
 	if err != nil {
@@ -143,6 +155,7 @@ func (r *InstanceResource) Create(ctx context.Context, req resource.CreateReques
 
 	data.ID = types.StringValue(instance.ID)
 	data.ProjectID = types.StringValue(instance.ProjectID)
+	data.SubnetID = types.StringPointerValue(instance.SubnetID)
 	data.Name = types.StringValue(instance.Name)
 	data.CPU = types.Int64Value(int64(instance.CPU))
 	data.MemoryMB = types.Int64Value(int64(instance.MemoryMB))
@@ -172,6 +185,7 @@ func (r *InstanceResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	data.Region = types.StringValue(instance.Region)
 	data.ProjectID = types.StringValue(instance.ProjectID)
+	data.SubnetID = types.StringPointerValue(instance.SubnetID)
 	data.Name = types.StringValue(instance.Name)
 	data.CPU = types.Int64Value(int64(instance.CPU))
 	data.MemoryMB = types.Int64Value(int64(instance.MemoryMB))

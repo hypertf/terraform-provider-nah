@@ -1,0 +1,1 @@
+terraform import nah_load_balancer_backend.app my-app/LOAD_BALANCER_ID/BACKEND_ID

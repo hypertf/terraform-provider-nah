@@ -2,6 +2,10 @@
 
 This directory contains examples that are mostly used for documentation, but can also be run/tested manually via the Terraform CLI.
 
+`cloud-graph/main.tf` demonstrates the full project and organization graph,
+including explicit parent IDs, same-subnet instance/load-balancer relationships,
+disk attachment, and evaluation-only policy binding.
+
 The document generation tool looks for files in the following locations by default. All other *.tf files besides the ones mentioned below are ignored by the documentation tool. This is useful for creating examples that can run and/or are testable even if some parts are not relevant for the documentation.
 
 * **provider/provider.tf** example file for the provider index page
