@@ -42,3 +42,6 @@ website/vendor
 # GPG keys - do not commit
 gpg-private-key.asc
 gpg-public-key.asc
+
+# Amp orb runtime state
+.amp/portals/

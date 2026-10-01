@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GO_VERSION="1.25.5"
+GO_SHA256="9e9b755d63b36acf30c12a9a3fc379243714c1c6d3dd72861da637f336ebb35b"
+TERRAFORM_VERSION="1.16.4"
+TERRAFORM_SHA256="dc94af0eef1147718ad7c8daea792ed199e3e0492eec180d0adafa2a65a879df"
+TOFU_VERSION="1.13.0"
+TOFU_SHA256="ad494034a03aaa66d93fc1c2c164d01bedf21b44cfb8b616182cb69424a67672"
+
+install_zip_binary() {
+  local name="$1"
+  local version="$2"
+  local sha256="$3"
+  local url="$4"
+  local archive_member="$5"
+
+  if command -v "$name" >/dev/null 2>&1 && "$name" version 2>/dev/null | head -n 1 | grep -Fq "$version"; then
+    return
+  fi
+
+  local workdir
+  workdir="$(mktemp -d)"
+  trap 'rm -rf "$workdir"' RETURN
+  curl --fail --location --silent --show-error "$url" -o "$workdir/$name.zip"
+  echo "$sha256  $workdir/$name.zip" | sha256sum --check --status
+  unzip -q "$workdir/$name.zip" "$archive_member" -d "$workdir"
+  sudo install -m 0755 "$workdir/$archive_member" "/usr/local/bin/$name"
+  rm -rf "$workdir"
+  trap - RETURN
+}
+
+if ! command -v go >/dev/null 2>&1 || [[ "$(go env GOVERSION 2>/dev/null || true)" != "go${GO_VERSION}" ]]; then
+  workdir="$(mktemp -d)"
+  trap 'rm -rf "$workdir"' EXIT
+  curl --fail --location --silent --show-error \
+    "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" \
+    -o "$workdir/go.tar.gz"
+  echo "$GO_SHA256  $workdir/go.tar.gz" | sha256sum --check --status
+  sudo rm -rf /usr/local/go
+  sudo tar -C /usr/local -xzf "$workdir/go.tar.gz"
+  sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
+  sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+  rm -rf "$workdir"
+  trap - EXIT
+fi
+
+install_zip_binary \
+  terraform "$TERRAFORM_VERSION" "$TERRAFORM_SHA256" \
+  "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
+  terraform
+
+install_zip_binary \
+  tofu "$TOFU_VERSION" "$TOFU_SHA256" \
+  "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip" \
+  tofu
+
+go mod download
+(cd tools && go mod download)
