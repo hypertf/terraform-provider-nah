@@ -50,6 +50,7 @@ output "instance_id" {
 - `cpu` (Number) Number of CPUs, 1–64. Defaults to 1.
 - `memory_mb` (Number) Memory in MB, 1–524288. Defaults to 512.
 - `status` (String) The status of the instance. Valid values: `running`, `stopped`. Defaults to `running`.
+- `subnet_id` (String) Optional opaque subnet ID. Adding, changing, or removing it replaces the instance.
 
 ### Read-Only
 

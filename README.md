@@ -1,8 +1,9 @@
 # Terraform / OpenTofu Provider for NahCloud
 
-Manage [NahCloud](https://github.com/hypertf/nahcloud) projects, instances,
-buckets, objects, metadata, and API keys with Terraform or OpenTofu. NahCloud is
-a simulated cloud: these resources do not provision real compute or storage.
+Manage [NahCloud](https://github.com/hypertf/nahcloud) projects, compute,
+networking, storage, evaluation policies, load balancing, metadata, and API keys
+with Terraform or OpenTofu. NahCloud is a
+simulated cloud: these resources do not provision real infrastructure.
 
 ## Quick start
 
@@ -73,6 +74,8 @@ a registry release; no release tag is required for development.
 * API tokens, metadata values, and object contents are sensitive. Terraform state
   still contains these values in plaintext: use an encrypted, access-controlled
   backend and restrict state access.
+* Policies and bindings are organization-scoped evaluation data; they do not
+  authorize ordinary CRUD. Fault rules are intentionally not Terraform-managed.
 * HTTP requests have a 30-second timeout, honor cancellation, reuse connections,
   and never follow redirects. Writes are not automatically retried: the API has
   no idempotency keys, and retrying a lost create response could create duplicates.
@@ -88,6 +91,14 @@ terraform import nah_bucket.assets my-app/BUCKET_ID
 terraform import nah_object.config my-app/BUCKET_ID/OBJECT_ID
 terraform import nah_metadata.config METADATA_ID
 terraform import nah_api_key.automation KEY_ID
+terraform import nah_network.app my-app/NETWORK_ID
+terraform import nah_subnet.app my-app/NETWORK_ID/SUBNET_ID
+terraform import nah_disk.data my-app/DISK_ID
+terraform import nah_disk_attachment.data my-app/DISK_ID/ATTACHMENT_ID
+terraform import nah_policy.read POLICY_ID
+terraform import nah_policy_binding.read POLICY_ID/BINDING_ID
+terraform import nah_load_balancer.app my-app/LOAD_BALANCER_ID
+terraform import nah_load_balancer_backend.app my-app/LOAD_BALANCER_ID/BACKEND_ID
 ```
 
 Organization creation/update/deletion is not represented as a managed resource:
@@ -111,8 +122,10 @@ above rather than applying a destructive replacement plan blindly.
 
 Requires Go 1.25.5+, a C compiler for SQLite acceptance tests, Terraform and/or
 OpenTofu. CI tests real CLI executions against the pinned upstream NahCloud
-module in `go.mod`, with a fresh SQLite database per test. No network account,
-shared server, token secret, or production access is required.
+module in `go.mod` plus a local cloud-graph contract server, with a fresh SQLite
+database per test. The exact assumed routes and fields are documented in
+[`docs/api-assumptions.md`](docs/api-assumptions.md). No network account, shared
+server, token secret, or production access is required.
 
 ```sh
 go build ./...
@@ -128,13 +141,10 @@ empty plans, updates retaining IDs, all imports, data sources, drift repair,
 replacement, remote deletion/recreation, and destroy. Unit tests cover HTTP
 contracts, errors, cancellation, secret redaction, validation, and state safety.
 
-To test an explicitly authorized remote deployment, set `NAH_ACC_ENDPOINT` to
-its base URL when running `make testacc`. This creates a separate organization
-per CLI, destroys managed resources, and revokes the bootstrap key. Empty
-organization records remain because the API has no organization-delete route.
-CI never sets this variable and never targets production. The provider requires
-the stable-ID bucket routes and direct API-key lookup introduced in NahCloud
-[`fd899d4`](https://github.com/hypertf/nahcloud/commit/fd899d468aae5fc16a12494a97fab9a22b2c949b).
+Acceptance is intentionally local-only and ignores remote endpoint settings. It
+combines the pinned upstream router for existing resources with an in-memory
+contract server for the assumed cloud-graph routes, so it cannot mutate a shared
+or production deployment.
 
 For manual development, run `go install .` and point a CLI configuration file at
 the resulting binary directory:

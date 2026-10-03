@@ -1,0 +1,1 @@
+terraform import nah_policy.read_network POLICY_ID

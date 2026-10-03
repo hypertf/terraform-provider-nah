@@ -21,9 +21,9 @@ import (
 	"github.com/hypertf/terraform-provider-nah/internal/client"
 )
 
-// TestAccCLI uses the built provider binary, a real CLI, the upstream HTTP router,
-// and a disposable SQLite database by default. NAH_ACC_ENDPOINT explicitly opts
-// into a remote deployment, with a fresh organization for each CLI.
+// TestAccCLI uses the built provider binary, a real CLI, the pinned upstream HTTP
+// router, and a local contract implementation for cloud-graph routes. It never
+// targets a deployed NahCloud environment.
 func TestAccCLI(t *testing.T) {
 	if os.Getenv("TF_ACC") != "1" {
 		t.Skip("set TF_ACC=1 to run real CLI acceptance tests")
@@ -141,6 +141,12 @@ func testLifecycle(t *testing.T, cli, bin string) {
 	check(initial, "data.nah_object.test", "content", "b25l")
 	check(initial, "data.nah_metadata.test", "value", "one")
 	check(initial, "data.nah_organization.test", "slug", org.Slug)
+	check(initial, "data.nah_network.test", "region", "eu-west-1")
+	check(initial, "data.nah_subnet.test", "network_id", id(initial, "network"))
+	check(initial, "data.nah_disk.test", "size_gb", float64(20))
+	check(initial, "data.nah_disk_attachment.test", "instance_id", id(initial, "instance"))
+	check(initial, "data.nah_load_balancer.test", "subnet_id", id(initial, "subnet"))
+	check(initial, "data.nah_load_balancer_backend.test", "weight", float64(100))
 	if token, ok := initial["nah_api_key.test"]["token"].(string); !ok || token == "" {
 		t.Fatal("missing created API token")
 	}
@@ -150,7 +156,7 @@ func testLifecycle(t *testing.T, cli, bin string) {
 	run(0, "apply", "-auto-approve", "-no-color")
 	run(0, "plan", "-detailed-exitcode", "-no-color")
 	updated := state()
-	for _, name := range []string{"project", "instance", "bucket", "object", "metadata", "api_key"} {
+	for _, name := range []string{"project", "instance", "bucket", "object", "metadata", "api_key", "network", "subnet", "disk", "disk_attachment", "policy", "policy_binding", "load_balancer", "load_balancer_backend"} {
 		check(updated, "nah_"+name+".test", "id", initial["nah_"+name+".test"]["id"])
 	}
 	check(updated, "nah_instance.test", "cpu", float64(3))
@@ -159,6 +165,10 @@ func testLifecycle(t *testing.T, cli, bin string) {
 	check(updated, "nah_metadata.test", "value", "")
 	check(updated, "nah_object.test", "path", "nested/new.json")
 	check(updated, "nah_api_key.test", "token", initial["nah_api_key.test"]["token"])
+	check(updated, "nah_network.test", "name", "primary-renamed")
+	check(updated, "nah_disk.test", "size_gb", float64(30))
+	check(updated, "nah_load_balancer.test", "algorithm", "least_connections")
+	check(updated, "nah_load_balancer_backend.test", "weight", float64(50))
 
 	// Exercise every import with real CLI state removal, refresh, and an empty plan.
 	imports := map[string]string{
@@ -166,8 +176,16 @@ func testLifecycle(t *testing.T, cli, bin string) {
 		"bucket":   "test-project/" + id(updated, "bucket"),
 		"object":   "test-project/" + id(updated, "bucket") + "/" + id(updated, "object"),
 		"metadata": id(updated, "metadata"), "api_key": id(updated, "api_key"),
+		"network":               "test-project/" + id(updated, "network"),
+		"subnet":                "test-project/" + id(updated, "network") + "/" + id(updated, "subnet"),
+		"disk":                  "test-project/" + id(updated, "disk"),
+		"disk_attachment":       "test-project/" + id(updated, "disk") + "/" + id(updated, "disk_attachment"),
+		"policy":                id(updated, "policy"),
+		"policy_binding":        id(updated, "policy") + "/" + id(updated, "policy_binding"),
+		"load_balancer":         "test-project/" + id(updated, "load_balancer"),
+		"load_balancer_backend": "test-project/" + id(updated, "load_balancer") + "/" + id(updated, "load_balancer_backend"),
 	}
-	for _, name := range []string{"project", "instance", "bucket", "object", "metadata", "api_key"} {
+	for _, name := range []string{"project", "instance", "bucket", "object", "metadata", "api_key", "network", "subnet", "disk", "disk_attachment", "policy", "policy_binding", "load_balancer", "load_balancer_backend"} {
 		run(0, "state", "rm", "nah_"+name+".test")
 		run(0, "import", "-no-color", "nah_"+name+".test", imports[name])
 	}
@@ -185,12 +203,20 @@ func testLifecycle(t *testing.T, cli, bin string) {
 	if _, err := c.UpdateBucket(t.Context(), "test-project", id(updated, "bucket"), "external-bucket"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := c.UpdateNetwork(t.Context(), "test-project", id(updated, "network"), map[string]string{"name": "external-network"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.UpdateBackend(t.Context(), "test-project", id(updated, "load_balancer"), id(updated, "load_balancer_backend"), map[string]int{"weight": 99}); err != nil {
+		t.Fatal(err)
+	}
 	run(2, "plan", "-detailed-exitcode", "-no-color")
 	run(0, "apply", "-auto-approve", "-no-color")
 	check(state(), "nah_project.test", "name", "Project 2")
 	check(state(), "nah_bucket.test", "name", "assets-renamed")
 	check(state(), "nah_bucket.test", "id", id(updated, "bucket"))
 	check(state(), "nah_object.test", "id", id(updated, "object"))
+	check(state(), "nah_network.test", "name", "primary-renamed")
+	check(state(), "nah_load_balancer_backend.test", "weight", float64(50))
 
 	// Immutable image changes replace instead of attempting an invalid PATCH.
 	write("main.tf", strings.ReplaceAll(config(2), "ubuntu:24.04", "debian:12"))
@@ -218,10 +244,16 @@ func testLifecycle(t *testing.T, cli, bin string) {
 	if err := c.DeleteAPIKey(t.Context(), imports["api_key"]); err != nil {
 		t.Fatal(err)
 	}
+	if err := c.DeleteDiskAttachment(t.Context(), "test-project", id(replaced, "disk"), id(replaced, "disk_attachment")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeletePolicyBinding(t.Context(), id(replaced, "policy"), id(replaced, "policy_binding")); err != nil {
+		t.Fatal(err)
+	}
 	run(2, "plan", "-detailed-exitcode", "-no-color")
 	run(0, "apply", "-auto-approve", "-no-color")
 	run(0, "plan", "-detailed-exitcode", "-no-color")
-	for _, name := range []string{"instance", "object", "metadata", "api_key"} {
+	for _, name := range []string{"instance", "object", "metadata", "api_key", "disk_attachment", "policy_binding"} {
 		if state()["nah_"+name+".test"]["id"] == replaced["nah_"+name+".test"]["id"] {
 			t.Fatalf("%s not recreated after deletion", name)
 		}
@@ -264,27 +296,22 @@ func testLifecycle(t *testing.T, cli, bin string) {
 	}
 }
 
-// Remote tests are opt-in and create an isolated organization per CLI. The API
-// lacks organization deletion, so cleanup revokes its bootstrap key instead.
 func testAPI(t *testing.T) (string, *domain.OrganizationWithAPIKey) {
 	t.Helper()
-	endpoint := strings.TrimRight(os.Getenv("NAH_ACC_ENDPOINT"), "/")
-	remote := endpoint != ""
-	if !remote {
-		db, err := sqlite.NewDB(filepath.Join(t.TempDir(), "nah.sqlite"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			if err := db.Close(); err != nil {
-				t.Error(err)
-			}
-		})
-		svc := service.NewService(sqlite.NewOrganizationRepository(db), sqlite.NewAPIKeyRepository(db), sqlite.NewSessionRepository(db), sqlite.NewProjectRepository(db), sqlite.NewInstanceRepository(db), sqlite.NewMetadataRepository(db), sqlite.NewBucketRepository(db), sqlite.NewObjectRepository(db))
-		server := httptest.NewServer(api.SetupRouter(api.NewHandler(svc), svc, "acceptance"))
-		t.Cleanup(server.Close)
-		endpoint = server.URL
+	db, err := sqlite.NewDB(filepath.Join(t.TempDir(), "nah.sqlite"))
+	if err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	svc := service.NewService(sqlite.NewOrganizationRepository(db), sqlite.NewAPIKeyRepository(db), sqlite.NewSessionRepository(db), sqlite.NewProjectRepository(db), sqlite.NewInstanceRepository(db), sqlite.NewMetadataRepository(db), sqlite.NewBucketRepository(db), sqlite.NewObjectRepository(db))
+	base := api.SetupRouter(api.NewHandler(svc), svc, "acceptance")
+	server := httptest.NewServer(newGraphContractServer(base))
+	t.Cleanup(server.Close)
+	endpoint := server.URL
 	slug := fmt.Sprintf("provider-acc-%d", time.Now().UnixNano())
 	body, err := json.Marshal(domain.CreateOrganizationRequest{Slug: slug, Name: "Provider acceptance test"})
 	if err != nil {
@@ -311,25 +338,15 @@ func testAPI(t *testing.T) (string, *domain.OrganizationWithAPIKey) {
 	if org.APIKey.Token == "" {
 		t.Fatal("test organization has no API key")
 	}
-	if remote {
-		t.Logf("isolated remote test organization: %s", slug)
-		t.Cleanup(func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if err := client.NewClient(endpoint, org.APIKey.Token).DeleteAPIKey(ctx, org.APIKey.ID); err != nil {
-				t.Errorf("revoke test bootstrap key: %v", err)
-			}
-		})
-	}
 	return endpoint, &org
 }
 
 func config(version int) string {
 	value, content, path, status := "one", "b25l", "nested/original.json", "running"
-	bucket := "assets"
+	bucket, graphName, diskSize, backendWeight, algorithm := "assets", "primary", 20, 100, "round_robin"
 	if version == 2 {
 		value, content, path, status = "", "dHdv", "nested/new.json", "stopped"
-		bucket = "assets-renamed"
+		bucket, graphName, diskSize, backendWeight, algorithm = "assets-renamed", "primary-renamed", 30, 50, "least_connections"
 	}
 	return fmt.Sprintf(`
 terraform {
@@ -344,6 +361,7 @@ resource "nah_project" "test" {
 }
 resource "nah_instance" "test" {
   project = nah_project.test.slug
+  subnet_id = nah_subnet.test.id
   name = "web"
   region = "eu-west-1"
   cpu = %d
@@ -366,6 +384,60 @@ resource "nah_metadata" "test" {
   value = %q
 }
 resource "nah_api_key" "test" { name = "automation" }
+resource "nah_network" "test" {
+  project = nah_project.test.slug
+  name    = %q
+  region  = "eu-west-1"
+}
+resource "nah_subnet" "test" {
+  project           = nah_project.test.slug
+  network_id        = nah_network.test.id
+  name              = %q
+  cidr              = "10.42.1.0/24"
+}
+resource "nah_disk" "test" {
+  project   = nah_project.test.slug
+  name      = %q
+  size_gb   = %d
+  region    = "eu-west-1"
+  type      = "ssd"
+}
+resource "nah_disk_attachment" "test" {
+  project     = nah_project.test.slug
+  disk_id     = nah_disk.test.id
+  instance_id = nah_instance.test.id
+  device      = "vdb"
+}
+resource "nah_policy" "test" {
+  name        = %q
+  description = "Terraform acceptance policy"
+  effect      = "allow"
+  actions     = ["network:read"]
+}
+resource "nah_policy_binding" "test" {
+  policy_id      = nah_policy.test.id
+  principal_type = "api_key"
+  principal_id   = nah_api_key.test.id
+  target_type    = "project"
+  target_id      = nah_project.test.id
+}
+resource "nah_load_balancer" "test" {
+  project    = nah_project.test.slug
+  subnet_id  = nah_subnet.test.id
+  name       = %q
+  protocol   = "http"
+  port       = 80
+  algorithm  = %q
+  health_check_path = "/health"
+}
+resource "nah_load_balancer_backend" "test" {
+  project          = nah_project.test.slug
+  load_balancer_id = nah_load_balancer.test.id
+  instance_id      = nah_instance.test.id
+  port             = 8080
+  weight           = %d
+  enabled          = true
+}
 # Data sources
 data "nah_project" "test" { slug = nah_project.test.slug }
 data "nah_instance" "test" {
@@ -383,5 +455,39 @@ data "nah_object" "test" {
 }
 data "nah_metadata" "test" { id = nah_metadata.test.id }
 data "nah_organization" "test" {}
-`, version, version+1, status, bucket, path, content, value)
+data "nah_network" "test" {
+  project = nah_project.test.slug
+  id      = nah_network.test.id
+}
+data "nah_subnet" "test" {
+  project    = nah_project.test.slug
+  network_id = nah_network.test.id
+  id         = nah_subnet.test.id
+}
+data "nah_disk" "test" {
+  project = nah_project.test.slug
+  id      = nah_disk.test.id
+}
+data "nah_disk_attachment" "test" {
+  project = nah_project.test.slug
+  disk_id = nah_disk.test.id
+  id      = nah_disk_attachment.test.id
+}
+data "nah_policy" "test" {
+  id = nah_policy.test.id
+}
+data "nah_policy_binding" "test" {
+  policy_id = nah_policy.test.id
+  id        = nah_policy_binding.test.id
+}
+data "nah_load_balancer" "test" {
+  project = nah_project.test.slug
+  id      = nah_load_balancer.test.id
+}
+data "nah_load_balancer_backend" "test" {
+  project          = nah_project.test.slug
+  load_balancer_id = nah_load_balancer.test.id
+  id               = nah_load_balancer_backend.test.id
+}
+`, version, version+1, status, bucket, path, content, value, graphName, graphName, graphName, diskSize, graphName, graphName, algorithm, backendWeight)
 }

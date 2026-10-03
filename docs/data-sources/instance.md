@@ -37,4 +37,5 @@ data "nah_instance" "example" {
 - `project_id` (String) The ID of the project this instance belongs to.
 - `region` (String) Instance region.
 - `status` (String) The status of the instance.
+- `subnet_id` (String) Opaque subnet ID, or null for instances not attached to a subnet.
 - `updated_at` (String) The timestamp when the instance was last updated.

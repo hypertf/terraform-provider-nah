@@ -11,6 +11,7 @@ import (
 	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -24,7 +25,7 @@ func TestSchema(t *testing.T) {
 	if err != nil || len(resp.Diagnostics) != 0 {
 		t.Fatalf("schema: %v %v", err, resp.Diagnostics)
 	}
-	if len(resp.ResourceSchemas) != 6 || len(resp.DataSourceSchemas) != 6 {
+	if len(resp.ResourceSchemas) != 14 || len(resp.DataSourceSchemas) != 14 {
 		t.Fatal("missing registered schema")
 	}
 }
@@ -123,10 +124,17 @@ func TestResourceDeletionAndFailures(t *testing.T) {
 				state := tfsdk.State{Schema: schema.Schema}
 				state.RemoveResource(t.Context())
 				for key := range schema.Schema.Attributes {
-					if key != "cpu" && key != "memory_mb" {
-						if d := state.SetAttribute(t.Context(), path.Root(key), "test"); d.HasError() {
-							t.Fatal(d)
-						}
+					value := any("test")
+					switch key {
+					case "cpu", "memory_mb", "size_gb", "port", "weight", "seed", "duration_seconds":
+						value = int64(1)
+					case "enabled", "healthy":
+						value = true
+					case "actions":
+						value = []string{"*"}
+					}
+					if d := state.SetAttribute(t.Context(), path.Root(key), value); d.HasError() {
+						t.Fatal(d)
 					}
 				}
 				var configure resource.ConfigureResponse
@@ -160,6 +168,22 @@ func TestMalformedImports(t *testing.T) {
 		importScoped(t.Context(), resource.ImportStateRequest{ID: id}, &resp, "project", "id")
 		if !resp.Diagnostics.HasError() {
 			t.Fatalf("accepted malformed import %q", id)
+		}
+	}
+}
+
+func TestDiskSizeReplacement(t *testing.T) {
+	for _, tc := range []struct {
+		state, plan int64
+		replace     bool
+	}{{20, 30, false}, {30, 20, true}, {20, 20, false}} {
+		var resp planmodifier.Int64Response
+		replaceOnShrink{}.PlanModifyInt64(t.Context(), planmodifier.Int64Request{
+			StateValue: types.Int64Value(tc.state),
+			PlanValue:  types.Int64Value(tc.plan),
+		}, &resp)
+		if resp.RequiresReplace != tc.replace {
+			t.Fatalf("size %d -> %d: replace=%t", tc.state, tc.plan, resp.RequiresReplace)
 		}
 	}
 }

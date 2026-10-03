@@ -51,6 +51,7 @@ type Instance struct {
 	ID        string    `json:"id"`
 	Region    string    `json:"region"`
 	ProjectID string    `json:"project_id"`
+	SubnetID  *string   `json:"subnet_id"`
 	Name      string    `json:"name"`
 	CPU       int       `json:"cpu"`
 	MemoryMB  int       `json:"memory_mb"`
@@ -226,12 +227,13 @@ func (c *Client) DeleteProject(ctx context.Context, id string) error {
 // Instance methods
 
 type CreateInstanceRequest struct {
-	Region   string `json:"region"`
-	Name     string `json:"name"`
-	CPU      int    `json:"cpu"`
-	MemoryMB int    `json:"memory_mb"`
-	Image    string `json:"image"`
-	Status   string `json:"status,omitempty"`
+	Region   string  `json:"region"`
+	SubnetID *string `json:"subnet_id,omitempty"`
+	Name     string  `json:"name"`
+	CPU      int     `json:"cpu"`
+	MemoryMB int     `json:"memory_mb"`
+	Image    string  `json:"image"`
+	Status   string  `json:"status,omitempty"`
 }
 
 type UpdateInstanceRequest struct {
